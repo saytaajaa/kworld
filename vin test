@@ -1,0 +1,174 @@
+// backend/app.js
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const axios = require('axios');
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get('/api/vin/:vin', async (req, res) => {
+    const { vin } = req.params;
+    
+    try {
+        const response = await axios.post(
+            'https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValuesBatch/',
+            `DATA=${vin}&format=json`,
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+        
+        const data = response.data.Results[0];
+        
+        res.json({
+            manufacturer: data.Manufacturer,
+            model: data.Model,
+            year: data.ModelYear,
+            engineNumber: data.EngineNumber,
+            color: data.Color,
+            accidentHistory: "N/A"  // 실제 사고 이력은 별도의 API를 통해 받아야 합니다.
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Error retrieving VIN information' });
+    }
+});
+
+app.use(express.static(path.join(__dirname, 'frontend', 'build')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'build', 'index.html'));
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// backend/package.json
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "axios": "^0.24.0",
+    "cors": "^2.8.5",
+    "express": "^4.17.1"
+  }
+}
+// frontend/src/App.js
+import React, { useState } from 'react';
+import axios from 'axios';
+import './App.css';
+
+function App() {
+    const [vin, setVin] = useState('');
+    const [carInfo, setCarInfo] = useState(null);
+    const [error, setError] = useState('');
+
+    const handleVinChange = (e) => {
+        setVin(e.target.value);
+    };
+
+    const handleSearch = async () => {
+        try {
+            const response = await axios.get(`/api/vin/${vin}`);
+            setCarInfo(response.data);
+            setError('');
+        } catch (error) {
+            setError('Error fetching car information. Please check the VIN and try again.');
+            setCarInfo(null);
+        }
+    };
+
+    return (
+        <div className="App">
+            <h1>VIN Number Search</h1>
+            <input 
+                type="text" 
+                value={vin} 
+                onChange={handleVinChange} 
+                placeholder="Enter VIN number" 
+            />
+            <button onClick={handleSearch}>Search</button>
+            {error && <p className="error">{error}</p>}
+            {carInfo && (
+                <div className="car-info">
+                    <h2>Car Information</h2>
+                    <p>Manufacturer: {carInfo.manufacturer}</p>
+                    <p>Model: {carInfo.model}</p>
+                    <p>Year: {carInfo.year}</p>
+                    <p>Engine Number: {carInfo.engineNumber}</p>
+                    <p>Color: {carInfo.color}</p>
+                    <p>Accident History: {carInfo.accidentHistory}</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default App;
+// frontend/package.json
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "axios": "^0.24.0",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-scripts": "4.0.3"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  }
+}
+/* frontend/src/App.css */
+.App {
+    text-align: center;
+    padding: 2rem;
+}
+
+input {
+    padding: 0.5rem;
+    margin: 0.5rem;
+    width: 300px;
+}
+
+button {
+    padding: 0.5rem 1rem;
+    margin: 0.5rem;
+}
+
+.car-info {
+    margin-top: 2rem;
+}
+
+.error {
+    color: red;
+    margin-top: 1rem;
+}
+// package.json
+{
+  "name": "car-info",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm start",
+    "client": "cd frontend && npm start",
+    "install-client": "cd frontend && npm install",
+    "install-server": "cd backend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^6.2.1"
+  }
+}
+
